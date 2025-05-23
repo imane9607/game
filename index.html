@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لعبة تدحرج الكرة - منظور ثنائي الأبعاد</title> {/* Changed Title a bit */}
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-image: linear-gradient(to bottom, #e0e8f0, #c8d2dc); /* Even softer background */
+            font-family: 'Tahoma', 'Arial', sans-serif;
+            color: #333;
+            overflow-x: hidden;
+        }
+        canvas {
+            border: 3px solid #404040;
+            cursor: default;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3); /* Slightly stronger shadow for canvas */
+            border-radius: 12px;
+            background-color: #ADD8E6;
+        }
+        #mainUIContainer {
+            background-color: #fbfdff;
+            padding: 25px;
+            border-radius: 18px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+            margin-bottom: 25px;
+            max-width: 900px;
+            width: calc(100% - 40px);
+            margin-left: auto;
+            margin-right: auto;
+            border: 1px solid #dae1e8;
+        }
+        #controlsContainer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            margin-top: 15px;
+        }
+        #designControls, #levelControls {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #ebf1f7;
+            border-radius: 12px;
+            text-align: center;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        #designControls > p, #levelControls > p {
+            font-weight: bold;
+            margin-top: 0;
+            margin-bottom: 12px;
+            font-size: 1.25em;
+            color: #2c3e50;
+            border-bottom: 2px solid #c8d0d8;
+            padding-bottom: 8px;
+        }
+        #mainControls {
+            margin-top: 10px;
+            text-align: center;
+            width: 100%;
+        }
+        button {
+            margin: 6px 8px;
+            padding: 12px 20px;
+            font-size: 1.05em;
+            border: none;
+            border-radius: 8px;
+            background-color: #3498DB;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.2s, box-shadow 0.2s, transform 0.15s;
+            box-shadow: 0 3px 5px rgba(0,0,0,0.1);
+            font-weight: 500;
+        }
+        button:hover {
+            background-color: #2980B9;
+            box-shadow: 0 5px 10px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
+        }
+        button:active {
+            background-color: #2471A3;
+            transform: translateY(0px);
+            box-shadow: 0 2px 3px rgba(0,0,0,0.1);
+        }
+        .selected-tool {
+            background-color: #E74C3C !important;
+            box-shadow: 0 0 12px #E74C3C, 0 3px 6px rgba(0,0,0,0.2);
+            transform: translateY(-1px) scale(1.02);
+        }
+        #clearObstaclesButton, #toolEraser { background-color: #E74C3C !important; }
+        #clearObstaclesButton:hover, #toolEraser:hover { background-color: #C0392B !important; }
+
+        #playAgainButton, #nextLevelButton { background-color: #2ECC71 !important; }
+        #playAgainButton:hover, #nextLevelButton:hover { background-color: #27AE60 !important; }
+
+        .instructions-container {
+            margin-bottom: 20px;
+            padding: 18px;
+            background-color: #e7edf3;
+            border-radius: 10px;
+            min-height: 70px;
+            width: 100%;
+            box-sizing: border-box;
+            border: 1px solid #d2d9e1;
+            text-align: center;
+        }
+        #modeInstructions, #gameStatus {
+            margin: 5px 0;
+            font-size: 1.1em;
+            color: #34495e;
+            line-height: 1.5;
+        }
+        #gameStatus:empty { display: none; }
+
+        #scoreP, #levelInfoP, #hitsP {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-top: 10px;
+            margin-bottom: 10px;
+            background-color: #dbe5ef;
+            padding: 8px 15px;
+            border-radius: 8px;
+            display: inline-block;
+            margin-left: 10px;
+        }
+        #mainControls > div > p:first-child { margin-left: 0; }
+
+
+        #tempMessage {
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(44, 62, 80, 0.93); /* Darker, more opaque */
+            color: white;
+            padding: 30px 40px;
+            border-radius: 15px;
+            font-size: 1.8em;
+            font-weight: 500;
+            z-index: 10000;
+            display: none;
+            text-align: center;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.35);
+            border: 2px solid rgba(255,255,255,0.2);
+            max-width: 80%;
+        }
+    </style>
+</head>
+<body>
+    <div id="mainUIContainer">
+        <div id="tempMessage"></div>
+        <div class="instructions-container">
+            <p id="modeInstructions">اختر أداة تصميم ثم انقر على اللوحة لإضافة عائق.</p>
+            <p id="gameStatus"></p>
+        </div>
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="controlsContainer">
+            <div id="designControls">
+                <p>أدوات التصميم:</p>
+                <button id="toolWall">إضافة حائط</button>
+                <button id="toolStone">إضافة حجر</button>
+                <button id="toolTree">إضافة شجرة</button>
+                <button id="toolEraser">ممحاة</button>
+                <button id="clearObstaclesButton">مسح كل العوائق</button>
+            </div>
+            <div id="levelControls">
+                 <p>التحكم بالمستوى:</p>
+                <button id="nextLevelButton" style="display:none;">المستوى التالي</button>
+                <button id="playAgainButton" style="display:none;">إعادة لعب هذا المستوى</button>
+            </div>
+            <div id="mainControls">
+                <button id="toggleModeButton">بدء اللعب</button>
+                <div>
+                    <p id="levelInfoP">المستوى: 1</p>
+                    <p id="hitsP">الضربات: 0 / 0 (Par: 0)</p>
+                    <p id="scoreP">النقاط: 0</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        // UI Elements (same as before)
+        const modeInstructionsP = document.getElementById('modeInstructions');
+        const gameStatusP = document.getElementById('gameStatus');
+        const scoreP = document.getElementById('scoreP');
+        const levelInfoP = document.getElementById('levelInfoP');
+        const hitsP = document.getElementById('hitsP');
+        const tempMessageDiv = document.getElementById('tempMessage');
+        const toggleModeButton = document.getElementById('toggleModeButton');
+        const clearObstaclesButton = document.getElementById('clearObstaclesButton');
+        const playAgainButton = document.getElementById('playAgainButton');
+        const nextLevelButton = document.getElementById('nextLevelButton');
+        const toolWallButton = document.getElementById('toolWall');
+        const toolStoneButton = document.getElementById('toolStone');
+        const toolTreeButton = document.getElementById('toolTree');
+        const toolEraserButton = document.getElementById('toolEraser');
+
+
+        const backgroundCanvas = document.createElement('canvas');
+        backgroundCanvas.width = canvas.width;
+        backgroundCanvas.height = canvas.height;
+        const bgCtx = backgroundCanvas.getContext('2d');
+
+        const MODE_DESIGN = 'design';
+        const MODE_PLAY = 'play';
+        let currentMode = MODE_DESIGN;
+        let currentTool = 'wall';
+
+        let totalScore = 0;
+        let gameActive = false;
+        let playerHits = 0;
+        let parForLevel = 0;
+        let maxHitsForLevel = 0;
+
+        // Perspective Settings MODIFIED FOR 2D
+        function getPerspectiveScale(y) {
+            return 1.0; // For a flat 2D look
+        }
+        function getPerspectiveYOffset(y, objectHeight) {
+            return 0; // For a flat 2D look
+        }
+
+
+        const paddle = {
+            x: canvas.width / 2 - 55, y: canvas.height - 70,
+            width: 120, height: 25,
+            baseColor: '#A0522D', highlightColor: '#D2691E',
+        };
+
+        const ball = {
+            radius: 10, color: '#FDFDFD',
+            shadowColor: 'rgba(0,0,0,0.4)', highlightColor: 'rgba(255,255,255,0.85)',
+            x: 0, y: 0, dx: 0, dy: 0,
+            launchPower: 18,
+            minLaunchPower: 3.5,
+            friction: 0.978,
+            isMoving: false, minSpeed: 0.15,
+            isSinking: false, sinkTimer: 0, originalRadius: 10,
+            visualHeight: 0 // For flat 2D, this is effectively 0. Used for shadow placement.
+        };
+        const BALL_SINK_DURATION = 45;
+
+        const hole = {
+            x: canvas.width / 2, y: 100,
+            radius: 20, // Collision radius
+            colorOuter: '#282828', colorInner: '#000000', rimColor: '#484848',
+            gravityRadiusMultiplier: 2.7,
+            gravityStrength: 0.042,
+            visualBaseYOffset: 3 // Small offset to make hole top align with its y-coordinate
+        };
+
+        let obstacles = [];
+        const STONE_RESTITUTION = 0.45;
+        const TREE_TRUNK_RESTITUTION = 0.4;
+        const WALL_RESTITUTION_CANVAS_EDGE = 0.55;
+        const WALL_OBSTACLE_RESTITUTION = 0.5;
+
+        // Pixel Art definitions (Unchanged)
+        const PIXEL_ART_ROCK_SCALE = 2;
+        const PIXEL_ART_ROCK_COLOR_MAP = { 'O': '#1c1a25', 'H': '#cdc8d0', 'L': '#a9a2ad', 'M': '#827d86', 'D': '#605b65', 'C': '#47424e', 'S': '#677580', 'T': '#8c99a4', ' ': 'transparent'};
+        const DETAILED_ROCK_PATTERN = [ "                                      ", "              TTTTTTTTTTT             ", "           TTTSSSSSSSSSTTT            ", "         TTSSSSDMDMLSSDMSSTT          ", "        TSOMMMMMMMMMMMMMOTSST         ", "       TSOMMMLLLLHHLLLMMMOTSST        ", "      TSOMMLLLLHHHHHHLLMMMOTSST       ", "     TSSOMLLHHHHHHHHHHLLMMOTSST       ", "     TSSOMLLHHHHHHHHHHLLMMOTSST       ", "    TSSOMLLHHHHHHHHHHLLLLMMOTSST      ", "    TSSOMLLLLHHHHHHHLLLLLMMMOTST      ", "   TSSOMMMLLLLHHHHHLLLLLLMMMOTST      ", "   TSSOMMMLLLLLLLLLLLLLLLMMMMOTST     ", "   TSSOMMMMMLLLLLLLLLLMMMMMMMOTST     ", "  TSSOOMMMMMMMMMMMMMMMMMMMMMOOTST     ", "  TSSOOMMMMMMMDDDDMMMMMMMMMMOOTST     ", "  TSSOOOMMMMDDDDDDDDMMMMMMMMOOTST     ", "  TSSOOOMMMDDCDDDCDDMMMMMMMMOOTST     ", "  TSOOOOOMMDDCDCDCDMMMMMMMMOOOTST     ", "   TSOOOOOMMDDDDDDDMMMMMMMOOOOTST     ", "   TSSOOOOOOMMMMMMMMMMMMOOOOOOTST     ", "    TSTOOOOOOOOOOOOOOOOOOOOOOTST      ", "     TSTTOOOOOOOOOOOOOOOOOTTST        ", "      TTSTTTTTTTTTTTTTTTTSTT          ", "        TTTTTTTTTTTTTTTTT             ", "           TTTTTTTTTTT                ", "                                      ", "                                      "  ];
+        const PIXEL_ART_ROCK_PATTERN_HEIGHT_CHARS = DETAILED_ROCK_PATTERN.length;
+        const PIXEL_ART_ROCK_PATTERN_WIDTH_CHARS = DETAILED_ROCK_PATTERN[0].length;
+        const ACTUAL_PIXEL_ART_ROCK_WIDTH = PIXEL_ART_ROCK_PATTERN_WIDTH_CHARS * PIXEL_ART_ROCK_SCALE;
+        const ACTUAL_PIXEL_ART_ROCK_HEIGHT = PIXEL_ART_ROCK_PATTERN_HEIGHT_CHARS * PIXEL_ART_ROCK_SCALE;
+
+        const PIXEL_ART_TREE_SCALE = 2;
+        const PIXEL_ART_TREE_COLOR_MAP = {'W': '#FFFFFF', 'O': '#000000', 'H': '#95d663', 'G': '#5aa844', 'D': '#3a752c', 'P': '#4a8c3a', 'h': '#a06c49', 't': '#7b5133', 'd': '#573924', 'S': '#c0ecca', ' ': 'transparent' };
+        const DETAILED_TREE_PATTERN = [ "          WWWWWWWWWWWWW          ", "        WWOOOOOOOOOOOWW        ", "       WOOHHHHHHHHHHOOOW       ", "      WOOHHHHHPHHHHHHOOOW      ", "     WOOHHPHGGHPHGGHHOOOW     ", "    WOOHPGGGGGGGGGPHGHOOOW    ", "   WOOHGGHGGPGHGGHGGHOOOW   ", "  WOOGGGGGGGHGGGGGGHGGDOOW  ", "  WOOGPGGGGGGGGGGGGGPDDOOW  ", " WOOGGGHGGGGGGGGGGGDDDDOOW ", " WOOGGGGGDPGGGGGGDPDDDDOOW ", " WOOGDGGGGGGPDGGGGDD PDOOW ", " WOOOGDGGGGGGGGDDDDPPDOOOW ", " WOOOODDGGGGPDDDD DDDDOOOW ", "  WOOOODDDDDDDDDDD PDOOOOW  ", "  WOOOOOODDDDDDDD OOOOOOW  ", "   WOOOOOODDDDDD OOOOOOW   ", "    WWWWWOOOOOOOOOWWWWW    ", "         OOOthtOOO         ", "         OOOthtOOO         ", "         OOOtdtOOO         ", "         OOOtdtOOO         ", "         OOOtdtOOO         ", "         OOOtdtOOO         ", "         OOOtdtOOO         ", "         WWWWWWWWW         ", "  WWWWWWWWWWWWWWWWWWWWWWWWWWWWW  ", " WWSSSSSSSSSSSSSSSSSSSSSSSSSWW ", "WWSSSSSSSSSSSSSSSSSSSSSSSSSSSww", "WWSSSSSSSSSSSSSSSSSSSSSSSSSSSww", "WWSSSSSSSSSSSSSSSSSSSSSSSSSSSww", " WWSSSSSSSSSSSSSSSSSSSSSSSSSWW ", "  WWWWWWWWWWWWWWWWWWWWWWWWWWW  " ];
+        const PIXEL_ART_TREE_PATTERN_HEIGHT_CHARS = DETAILED_TREE_PATTERN.length;
+        const PIXEL_ART_TREE_PATTERN_WIDTH_CHARS = DETAILED_TREE_PATTERN[0].length;
+        const ACTUAL_PIXEL_ART_TREE_WIDTH = PIXEL_ART_TREE_PATTERN_WIDTH_CHARS * PIXEL_ART_TREE_SCALE;
+        const ACTUAL_PIXEL_ART_TREE_HEIGHT = PIXEL_ART_TREE_PATTERN_HEIGHT_CHARS * PIXEL_ART_TREE_SCALE;
+
+        const FIXED_SIZES = { // visualDepth removed from wall, visualHeight kept for shadow casting nuance
+            wall: { width: 100, height: 20 },
+            stone: { radius: ACTUAL_PIXEL_ART_ROCK_WIDTH / 2, visualHeight: ACTUAL_PIXEL_ART_ROCK_HEIGHT * 0.3 },
+            tree: {
+                trunkCollisionWidth: 5 * PIXEL_ART_TREE_SCALE,
+                trunkCollisionHeight: 9 * PIXEL_ART_TREE_SCALE,
+                visualHeight: ACTUAL_PIXEL_ART_TREE_HEIGHT * 0.8
+            }
+        };
+
+        const d3 = { color: function(colorStr) { let r = 0, g = 0, b = 0; if (colorStr.startsWith('#')) { if (colorStr.length == 4) { r = parseInt(colorStr[1] + colorStr[1], 16); g = parseInt(colorStr[2] + colorStr[2], 16); b = parseInt(colorStr[3] + colorStr[3], 16); } else if (colorStr.length == 7) { r = parseInt(colorStr[1] + colorStr[2], 16); g = parseInt(colorStr[3] + colorStr[4], 16); b = parseInt(colorStr[5] + colorStr[6], 16); } } else if (colorStr.startsWith('rgb')) { const parts = colorStr.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/); if(parts) { r=parseInt(parts[1]); g=parseInt(parts[2]); b=parseInt(parts[3]); } } return { darker: function(k = 1) { const factor = Math.pow(0.7, k); return `rgb(${Math.max(0, Math.round(r * factor))}, ${Math.max(0, Math.round(g * factor))}, ${Math.max(0, Math.round(b * factor))})`; }, brighter: function(k = 1) { const factor = 1 / Math.pow(0.7, k); return `rgb(${Math.min(255, Math.round(r * factor))}, ${Math.min(255, Math.round(g * factor))}, ${Math.min(255, Math.round(b * factor))})`; }, toString: function() { return `rgb(${r},${g},${b})`;} }; } };
+
+        let currentLevelIndex = 0;
+        const levels = [
+            { name: "المستوى الأول: البداية", par: 3, maxHits: 5, holePos: { x: canvas.width * 0.8, y: 150 }, obstacles: [{ type: 'wall', x: canvas.width / 2 - 50, y: canvas.height / 2, width: FIXED_SIZES.wall.width, height: FIXED_SIZES.wall.height, color: '#8A9AAB', topColor: '#B8C4D2' }] },
+            { name: "المستوى الثاني: تحدي الحجارة", par: 4, maxHits: 6, holePos: { x: 150, y: 120 }, obstacles: [{ type: 'stone', x: canvas.width / 2, y: canvas.height / 2 + 30, radius: FIXED_SIZES.stone.radius }, { type: 'stone', x: canvas.width / 2 + ACTUAL_PIXEL_ART_ROCK_WIDTH + 20, y: canvas.height / 2 - 20, radius: FIXED_SIZES.stone.radius }, { type: 'wall', x: canvas.width * 0.7, y: 200, width: FIXED_SIZES.wall.width, height: FIXED_SIZES.wall.height, color: '#8A9AAB', topColor: '#B8C4D2' }] },
+            { name: "المستوى الثالث: غابة الأشجار", par: 5, maxHits: 7, holePos: { x: canvas.width - 100, y: canvas.height - 150 }, obstacles: [{ type: 'tree', x: 200, y: 250 + (25 * PIXEL_ART_TREE_SCALE), trunkCollisionWidth: FIXED_SIZES.tree.trunkCollisionWidth, trunkCollisionHeight: FIXED_SIZES.tree.trunkCollisionHeight }, { type: 'tree', x: 450, y: 350 + (25 * PIXEL_ART_TREE_SCALE), trunkCollisionWidth: FIXED_SIZES.tree.trunkCollisionWidth, trunkCollisionHeight: FIXED_SIZES.tree.trunkCollisionHeight }, { type: 'wall', x: 600, y: 150, width: FIXED_SIZES.wall.width, height: FIXED_SIZES.wall.height, color: '#8A9AAB', topColor: '#B8C4D2' }, { type: 'wall', x: 600, y: 450, width: FIXED_SIZES.wall.width, height: FIXED_SIZES.wall.height, color: '#8A9AAB', topColor: '#B8C4D2' }] },
+            { name: "تصميم اللاعب", par: 5, maxHits: 10, holePos: { x: canvas.width / 2, y: 100 }, obstacles: [] }
+        ];
+        const USER_DESIGN_LEVEL_INDEX = levels.length -1;
+
+        let ballTrail = [];
+        const BALL_TRAIL_LENGTH = 18;
+        let showLaunchIndicator = false;
+        let launchIndicatorTarget = {x: 0, y: 0};
+
+        function displayMessage(message, duration = 2800) { tempMessageDiv.innerHTML = message.replace(/\n/g, '<br>'); tempMessageDiv.style.display = 'block'; if (duration > 0) { setTimeout(() => { tempMessageDiv.style.display = 'none'; }, duration); } }
+        function hideMessage() { tempMessageDiv.style.display = 'none'; }
+        function updateInterface() { [toolWallButton, toolStoneButton, toolTreeButton, toolEraserButton].forEach(btn => btn.classList.remove('selected-tool')); if (currentMode === MODE_DESIGN) { document.getElementById('designControls').style.display = 'block'; document.getElementById('levelControls').style.display = 'none'; toggleModeButton.textContent = "بدء اللعب"; playAgainButton.style.display = 'none'; nextLevelButton.style.display = 'none'; canvas.style.cursor = 'copy'; modeInstructionsP.textContent = `الوضع: تصميم. الأداة: ${getToolName(currentTool)}. انقر للإضافة أو المسح.`; if (currentTool === 'wall') toolWallButton.classList.add('selected-tool'); else if (currentTool === 'stone') toolStoneButton.classList.add('selected-tool'); else if (currentTool === 'tree') toolTreeButton.classList.add('selected-tool'); else if (currentTool === 'eraser') toolEraserButton.classList.add('selected-tool'); gameActive = false; ball.isSinking = false; ball.radius = ball.originalRadius; } else { document.getElementById('designControls').style.display = 'none'; document.getElementById('levelControls').style.display = 'block'; toggleModeButton.textContent = "العودة لوضع التصميم"; canvas.style.cursor = 'default'; playAgainButton.style.display = gameActive ? 'none' : 'inline-block'; nextLevelButton.style.display = (!gameActive && checkHoleCollision() && currentLevelIndex < levels.length -1 ) ? 'inline-block' : 'none'; if (gameActive) modeInstructionsP.textContent = "حرك المضرب. انقر لتوجيه وضرب الكرة."; else if (checkHoleCollision()) {modeInstructionsP.textContent = "أحسنت! الكرة في الحفرة!";} else modeInstructionsP.textContent = "انتهت اللعبة. اختر 'إعادة اللعب' أو 'المستوى التالي'."; } updateScoreDisplay(); gameStatusP.textContent = ""; }
+        function getToolName(tool) { if (tool === 'wall') return 'حائط'; if (tool === 'stone') return 'حجر'; if (tool === 'tree') return 'شجرة'; if (tool === 'eraser') return 'ممحاة'; return ''; }
+
+        function drawStaticBackgroundToBuffer() { /* ... (User's existing detailed background code - unchanged) ... */ const localCtx = bgCtx; const baseGreen = '#3E712C'; const lightPatchGreen = '#9ACD32'; const shadowGreen = '#2E531F'; const bladeColorDark = '#1A2B15'; const bladeColorMedium = '#25401F'; localCtx.save(); localCtx.fillStyle = baseGreen; localCtx.fillRect(0, 0, backgroundCanvas.width, backgroundCanvas.height); localCtx.globalAlpha = 0.35; localCtx.fillStyle = lightPatchGreen; localCtx.beginPath(); localCtx.moveTo(0, backgroundCanvas.height * 0.05); localCtx.bezierCurveTo(backgroundCanvas.width * 0.15, -backgroundCanvas.height * 0.1, backgroundCanvas.width * 0.55, -backgroundCanvas.height * 0.05, backgroundCanvas.width * 0.65, backgroundCanvas.height * 0.25); localCtx.bezierCurveTo(backgroundCanvas.width * 0.75, backgroundCanvas.height * 0.6, backgroundCanvas.width * 0.3, backgroundCanvas.height * 0.65, 0, backgroundCanvas.height * 0.45); localCtx.closePath(); localCtx.fill(); localCtx.beginPath(); localCtx.moveTo(backgroundCanvas.width * 0.6, backgroundCanvas.height * 0.05); localCtx.bezierCurveTo(backgroundCanvas.width * 0.9, -backgroundCanvas.height * 0.05, backgroundCanvas.width, backgroundCanvas.height * 0.25, backgroundCanvas.width, backgroundCanvas.height * 0.45); localCtx.bezierCurveTo(backgroundCanvas.width * 0.95, backgroundCanvas.height * 0.65, backgroundCanvas.width * 0.7, backgroundCanvas.height * 0.55, backgroundCanvas.width * 0.6, backgroundCanvas.height * 0.05); localCtx.closePath(); localCtx.fill(); localCtx.globalAlpha = 1.0; localCtx.globalAlpha = 0.4; localCtx.fillStyle = shadowGreen; localCtx.beginPath(); localCtx.moveTo(backgroundCanvas.width * 0.35, backgroundCanvas.height); localCtx.lineTo(backgroundCanvas.width, backgroundCanvas.height); localCtx.lineTo(backgroundCanvas.width, backgroundCanvas.height * 0.25); localCtx.bezierCurveTo(backgroundCanvas.width * 0.9, backgroundCanvas.height * 0.35, backgroundCanvas.width * 0.55, backgroundCanvas.height * 0.65, backgroundCanvas.width * 0.35, backgroundCanvas.height); localCtx.closePath(); localCtx.fill(); localCtx.strokeStyle = shadowGreen; localCtx.lineWidth = Math.min(backgroundCanvas.width, backgroundCanvas.height) * 0.06; localCtx.globalAlpha = 0.15; localCtx.beginPath(); localCtx.moveTo(-backgroundCanvas.width * 0.05, backgroundCanvas.height * 0.55); localCtx.bezierCurveTo(backgroundCanvas.width * 0.2, backgroundCanvas.height * 0.48, backgroundCanvas.width * 0.4, backgroundCanvas.height * 0.62, backgroundCanvas.width * 0.6, backgroundCanvas.height * 0.53); localCtx.bezierCurveTo(backgroundCanvas.width * 0.8, backgroundCanvas.height * 0.45, backgroundCanvas.width * 1.05, backgroundCanvas.height * 0.68, backgroundCanvas.width * 1.05, backgroundCanvas.height * 0.63); localCtx.stroke(); localCtx.beginPath(); localCtx.moveTo(-backgroundCanvas.width * 0.05, backgroundCanvas.height * 0.8); localCtx.bezierCurveTo(backgroundCanvas.width * 0.25, backgroundCanvas.height * 0.85, backgroundCanvas.width * 0.5, backgroundCanvas.height * 0.68, backgroundCanvas.width * 0.75, backgroundCanvas.height * 0.78); localCtx.bezierCurveTo(backgroundCanvas.width * 0.9, backgroundCanvas.height * 0.83, backgroundCanvas.width * 1.05, backgroundCanvas.height * 0.65, backgroundCanvas.width * 1.05, backgroundCanvas.height * 0.68); localCtx.stroke(); localCtx.globalAlpha = 1.0; localCtx.lineWidth = 1; function drawGrassTuft(cx, cy, numBlades, avgHeight, heightVariation, spread, baseColor, highlightColor) { for (let i = 0; i < numBlades; i++) { const bladeHeight = avgHeight + (Math.random() - 0.5) * heightVariation * 2; const bladeWidth = 1.5 + Math.random() * 2; const angle = Math.random() * Math.PI * 2; const radius = Math.random() * spread * (0.3 + Math.random() * 0.7); const bladeX = cx + Math.cos(angle) * radius; const bladeY = cy + Math.sin(angle) * radius * 0.3; const color = Math.random() < 0.35 ? highlightColor : baseColor; localCtx.fillStyle = color; localCtx.beginPath(); localCtx.moveTo(bladeX - bladeWidth / 2, bladeY); localCtx.lineTo(bladeX + bladeWidth / 2, bladeY); localCtx.lineTo(bladeX + (Math.random() - 0.5) * bladeWidth * 0.5, bladeY - bladeHeight); localCtx.closePath(); localCtx.fill(); } } const tufts = [ { x: 0.1, y: 0.12, n: 25, h: 18, hv: 10, s: 30, c1: bladeColorDark, c2: bladeColorMedium }, { x: 0.08, y: 0.25, n: 20, h: 15, hv: 8, s: 25, c1: bladeColorDark, c2: bladeColorMedium }, { x: 0.25, y: 0.30, n: 40, h: 22, hv: 12, s: 45, c1: bladeColorDark, c2: bladeColorMedium }, { x: 0.45, y: 0.50, n: 50, h: 20, hv: 10, s: 60, c1: bladeColorDark, c2: bladeColorMedium }, { x: 0.55, y: 0.52, n: 40, h: 18, hv: 9, s: 55, c1: bladeColorDark, c2: bladeColorMedium }, { x: 0.75, y: 0.28, n: 30, h: 18, hv: 9, s: 35, c1: bladeColorDark, c2: bladeColorMedium }, { x: 0.82, y: 0.32, n: 22, h: 16, hv: 7, s: 30, c1: bladeColorDark, c2: bladeColorMedium }, { x: 0.70, y: 0.65, n: 55, h: 28, hv: 14, s: 50, c1: bladeColorDark, c2: bladeColorMedium }, { x: 0.85, y: 0.75, n: 60, h: 33, hv: 16, s: 55, c1: bladeColorDark, c2: bladeColorMedium }, { x: 0.15, y: 0.85, n: 25, h: 20, hv: 10, s: 35, c1: bladeColorDark, c2: bladeColorMedium }, { x: 0.5, y: 0.9, n: 20, h: 18, hv: 9, s: 40, c1: bladeColorDark, c2: bladeColorMedium }, { x: 0.35, y: 0.15, n: 15, h: 12, hv: 6, s: 20, c1: bladeColorDark, c2: bladeColorMedium }, { x: 0.65, y: 0.40, n: 18, h: 14, hv: 7, s: 25, c1: bladeColorDark, c2: bladeColorMedium }, { x: 0.30, y: 0.70, n: 20, h: 16, hv: 8, s: 30, c1: bladeColorDark, c2: bladeColorMedium }, { x: 0.90, y: 0.55, n: 25, h: 20, hv: 10, s: 30, c1: bladeColorDark, c2: bladeColorMedium }, ]; tufts.forEach(t => { drawGrassTuft(backgroundCanvas.width * t.x, backgroundCanvas.height * t.y, t.n, t.h, t.hv, t.s, t.c1, t.c2); }); const numFineBlades = (backgroundCanvas.width * backgroundCanvas.height) / 180; localCtx.globalAlpha = 0.5; for (let i = 0; i < numFineBlades; i++) { const x = Math.random() * backgroundCanvas.width; const y = Math.random() * backgroundCanvas.height; const height = 2 + Math.random() * 5; const width = 1 + Math.random(); const color = Math.random() < 0.65 ? bladeColorDark : bladeColorMedium; localCtx.fillStyle = color; localCtx.fillRect(x - width/2, y - height, width, height); } localCtx.globalAlpha = 1.0; const overlayGrad = localCtx.createLinearGradient(0, 0, 0, backgroundCanvas.height); overlayGrad.addColorStop(0, "rgba(255,255,255,0.05)"); overlayGrad.addColorStop(0.7, "rgba(0,0,0,0.0)"); overlayGrad.addColorStop(1, "rgba(0,0,0,0.1)"); localCtx.fillStyle = overlayGrad; localCtx.fillRect(0, 0, backgroundCanvas.width, backgroundCanvas.height); localCtx.restore(); }
+        drawStaticBackgroundToBuffer();
+        function drawCanvasBackground() { ctx.drawImage(backgroundCanvas, 0, 0); }
+
+        // Shadow utility - SIMPLIFIED FOR 2D
+        function drawObjectShadow(x, y, baseWidth, baseHeight, visualObjHeight, pScaleIgnored) {
+            const shadowColor = `rgba(0,0,0,0.15)`;
+            const shadowWidth = baseWidth * 0.8;
+            const shadowHeightFactor = baseHeight > baseWidth * 0.5 ? 0.2 : 0.3;
+            const shadowHeight = Math.max(5, baseHeight * shadowHeightFactor);
+            
+            let shadowDrawY = y;
+            if (visualObjHeight > 0) {
+                 shadowDrawY += visualObjHeight * 0.1 + baseHeight * 0.05;
+            } else {
+                 shadowDrawY += baseHeight * 0.1;
+            }
+
+            ctx.fillStyle = shadowColor;
+            ctx.beginPath();
+            ctx.ellipse(x, shadowDrawY, shadowWidth / 2, shadowHeight / 2, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+
+        function drawPaddle() { // SIMPLIFIED FOR 2D
+            if (currentMode !== MODE_PLAY) return;
+            drawObjectShadow(paddle.x + paddle.width / 2, paddle.y + paddle.height / 2, paddle.width, paddle.height, 0, 1.0);
+            ctx.fillStyle = paddle.baseColor;
+            ctx.fillRect(paddle.x, paddle.y, paddle.width, paddle.height);
+            ctx.strokeStyle = d3.color(paddle.baseColor).brighter(0.5).toString();
+            ctx.lineWidth = 2;
+            ctx.strokeRect(paddle.x, paddle.y, paddle.width, paddle.height);
+        }
+
+        function addBallTrailPoint(x, y) { ballTrail.push({ x, y, alpha: 1.0, radius: ball.radius * (0.4 + Math.random()*0.4) }); if (ballTrail.length > BALL_TRAIL_LENGTH) ballTrail.shift(); }
+        function drawBallTrail() { if (currentMode !== MODE_PLAY || !ball.isMoving) return; for (let i = 0; i < ballTrail.length; i++) { const point = ballTrail[i]; point.alpha -= (1.0 / BALL_TRAIL_LENGTH) * 1.6; if (point.alpha <= 0) continue; ctx.fillStyle = `rgba(230, 230, 255, ${point.alpha * 0.35})`; ctx.beginPath(); ctx.arc(point.x, point.y, point.radius * point.alpha , 0, Math.PI * 2); ctx.fill(); } ballTrail = ballTrail.filter(p => p.alpha > 0); }
+
+        function drawBall() { // ADJUSTED FOR 2D
+            if (currentMode !== MODE_PLAY && !ball.isMoving && !checkHoleCollision() && !ball.isSinking) return;
+
+            const drawY = ball.y - ball.visualHeight; // visualHeight is 0
+
+            if (ball.isSinking) {
+                ball.sinkTimer++;
+                const sinkProgress = Math.min(1, ball.sinkTimer / BALL_SINK_DURATION);
+                const newRadius = ball.originalRadius * (1 - sinkProgress * sinkProgress);
+                ball.radius = Math.max(0.5, newRadius);
+            }
+            const displayRadius = ball.radius;
+
+            drawObjectShadow(ball.x, ball.y, ball.originalRadius * 2, ball.originalRadius * 0.8, ball.visualHeight, 1.0);
+
+            const prevSmoothing = ctx.imageSmoothingEnabled;
+            ctx.imageSmoothingEnabled = true;
+            const grad = ctx.createRadialGradient(
+                ball.x - displayRadius * 0.35, drawY - displayRadius * 0.35, displayRadius * 0.1,
+                ball.x, drawY, displayRadius
+            );
+            grad.addColorStop(0, ball.highlightColor);
+            grad.addColorStop(0.7, ball.color);
+            grad.addColorStop(1, d3.color(ball.color).darker(0.3).toString());
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(ball.x, drawY, displayRadius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.imageSmoothingEnabled = prevSmoothing;
+        }
+
+
+        function drawHole() { // SIMPLIFIED FOR 2D
+            const drawHoleY = hole.y + hole.visualBaseYOffset;
+            const visualRadius = hole.radius * 1.15;
+            const outerRimRadius = visualRadius + 7;
+            const prevSmoothing = ctx.imageSmoothingEnabled;
+            ctx.imageSmoothingEnabled = true;
+
+            let groundColorAroundHole = '#404040';
+            if (typeof bgCtx !== 'undefined' && bgCtx.fillStyle && typeof bgCtx.fillStyle === 'string') {
+                 try { groundColorAroundHole = d3.color(bgCtx.fillStyle).darker(0.5).toString(); } catch(e) { /* use fallback */ }
+            }
+            ctx.fillStyle = groundColorAroundHole;
+            ctx.beginPath();
+            ctx.arc(hole.x, drawHoleY, outerRimRadius + 3, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = hole.rimColor;
+            ctx.beginPath();
+            ctx.arc(hole.x, drawHoleY, outerRimRadius, 0, Math.PI * 2, false);
+            ctx.arc(hole.x, drawHoleY, visualRadius, 0, Math.PI * 2, true);
+            ctx.fill();
+
+            ctx.fillStyle = hole.colorInner;
+            ctx.beginPath();
+            ctx.arc(hole.x, drawHoleY, visualRadius, 0, Math.PI * 2);
+            ctx.fill();
+
+            const flagPoleHeight = Math.max(35, visualRadius * 2.2);
+            const flagPoleX = hole.x;
+            const flagBaseY = drawHoleY - 2;
+            const flagPoleTopY = flagBaseY - flagPoleHeight;
+            const flagWidth = Math.max(14, visualRadius * 0.8);
+            const flagHeight = Math.max(9, visualRadius * 0.55);
+
+            ctx.fillStyle = '#888888';
+            ctx.fillRect(flagPoleX - 1, flagPoleTopY, 2.5, flagPoleHeight);
+
+            ctx.fillStyle = '#D32F2F';
+            ctx.beginPath();
+            ctx.moveTo(flagPoleX + 1.5, flagPoleTopY);
+            ctx.lineTo(flagPoleX + 1.5, flagPoleTopY + flagHeight);
+            ctx.lineTo(flagPoleX + 1.5 + flagWidth, flagPoleTopY + flagHeight / 2);
+            ctx.closePath();
+            ctx.fill();
+            
+            ctx.fillStyle = '#FFEB3B';
+            ctx.beginPath();
+            ctx.arc(flagPoleX + 0.25, flagPoleTopY, 3.5, 0, Math.PI*2);
+            ctx.fill();
+
+            ctx.imageSmoothingEnabled = prevSmoothing;
+        }
+
+
+        function drawWall(wall) { // SIMPLIFIED FOR 2D
+            const wWidth = wall.width;
+            const wHeight = wall.height;
+            const drawX = wall.x;
+            const drawY = wall.y;
+            const prevSmoothing = ctx.imageSmoothingEnabled;
+            ctx.imageSmoothingEnabled = true;
+
+            drawObjectShadow(drawX + wWidth / 2, drawY + wHeight / 2, wWidth, wHeight, 0, 1.0);
+
+            ctx.fillStyle = wall.color;
+            ctx.fillRect(drawX, drawY, wWidth, wHeight);
+
+            const brickHeight = 9;
+            const brickWidth = 19;
+            ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+            ctx.lineWidth = 0.8;
+
+            for (let r = 1; r * brickHeight < wHeight; r++) {
+                ctx.beginPath();
+                ctx.moveTo(drawX, drawY + r * brickHeight);
+                ctx.lineTo(drawX + wWidth, drawY + r * brickHeight);
+                ctx.stroke();
+            }
+            for (let r = 0; (r + 1) * brickHeight <= wHeight + 0.1 ; r++) {
+                for (let c = 0; c * brickWidth < wWidth; c++) {
+                    let offset = (r % 2 === 0) ? 0 : brickWidth / 2;
+                     if (c * brickWidth + offset < wWidth - brickWidth * 0.05) {
+                         ctx.beginPath();
+                         ctx.moveTo(drawX + c * brickWidth + offset, drawY + r * brickHeight);
+                         ctx.lineTo(drawX + c * brickWidth + offset, drawY + (r + 1) * brickHeight);
+                         ctx.stroke();
+                    }
+                }
+            }
+            ctx.imageSmoothingEnabled = prevSmoothing;
+        }
+
+
+        function drawPixelArtPattern(context, startX, startY, baseScale, pScaleFactorIgnored, pattern, colors) {
+            const effectiveScale = baseScale;
+            const prevSmoothing = context.imageSmoothingEnabled;
+            context.imageSmoothingEnabled = false;
+            pattern.forEach((rowString, y_pattern) => {
+                for (let x_pattern = 0; x_pattern < rowString.length; x_pattern++) {
+                    const char = rowString[x_pattern];
+                    const color = colors[char];
+                    if (color && color !== 'transparent') {
+                        context.fillStyle = color;
+                        context.fillRect(
+                            startX + x_pattern * effectiveScale,
+                            startY + y_pattern * effectiveScale,
+                            effectiveScale, effectiveScale);
+                    }
+                }
+            });
+            context.imageSmoothingEnabled = prevSmoothing;
+        }
+
+        function drawStone(stone) { // ADJUSTED FOR 2D
+            const scaledWidth = ACTUAL_PIXEL_ART_ROCK_WIDTH;
+            const scaledHeight = ACTUAL_PIXEL_ART_ROCK_HEIGHT;
+            const drawTopLeftX = stone.x - scaledWidth / 2;
+            const drawTopLeftY = stone.y - scaledHeight / 2;
+
+            drawObjectShadow(stone.x, stone.y, scaledWidth, scaledHeight * 0.3, FIXED_SIZES.stone.visualHeight, 1.0);
+            drawPixelArtPattern(ctx, drawTopLeftX, drawTopLeftY, PIXEL_ART_ROCK_SCALE, 1.0, DETAILED_ROCK_PATTERN, PIXEL_ART_ROCK_COLOR_MAP);
+        }
+
+        function drawTree(tree) { // ADJUSTED FOR 2D
+            const trunkBaseRowInPattern = 25;
+            const trunkCenterColInPattern = 16;
+            const effectivePixelArtScale = PIXEL_ART_TREE_SCALE;
+            const drawTopLeftX = tree.x - (trunkCenterColInPattern * effectivePixelArtScale);
+            const drawTopLeftY = tree.y - (trunkBaseRowInPattern * effectivePixelArtScale);
+
+            const shadowBaseWidth = FIXED_SIZES.tree.trunkCollisionWidth * 2;
+            drawObjectShadow(tree.x, tree.y, shadowBaseWidth, shadowBaseWidth*0.4, FIXED_SIZES.tree.visualHeight, 1.0);
+            drawPixelArtPattern(ctx, drawTopLeftX, drawTopLeftY, PIXEL_ART_TREE_SCALE, 1.0, DETAILED_TREE_PATTERN, PIXEL_ART_TREE_COLOR_MAP);
+        }
+
+
+        function drawObstacles() { /* Not directly used for drawing anymore, items sorted in mainLoop */ }
+
+
+        // Physics and Game Logic
+        function handleObstacleCollisions() {
+            if (currentMode !== MODE_PLAY) return;
+
+            const maxImpactSpeedForDamping = ball.launchPower * 0.8; // Speed at which max damping factor is applied
+            const minRestitutionFactor = 0.4; // At maxImpactSpeedForDamping, restitution is scaled by this
+            const maxRestitutionFactor = 1.0; // At zero impact speed, restitution is scaled by this
+
+            obstacles.forEach(obstacle => {
+                let collisionPointData = null;
+                let normalX = 0, normalY = 0;
+                let baseRestitution = 0;
+
+                if (obstacle.type === 'wall') {
+                    let closestX = Math.max(obstacle.x, Math.min(ball.x, obstacle.x + obstacle.width));
+                    let closestY = Math.max(obstacle.y, Math.min(ball.y, obstacle.y + obstacle.height));
+                    const deltaX_wall = ball.x - closestX;
+                    const deltaY_wall = ball.y - closestY;
+                    const distanceSquared_wall = (deltaX_wall * deltaX_wall) + (deltaY_wall * deltaY_wall);
+                    if (distanceSquared_wall < (ball.radius * ball.radius) && distanceSquared_wall > 1e-9) { // Ensure not exactly on point and within radius
+                        const distance_wall = Math.sqrt(distanceSquared_wall);
+                        normalX = deltaX_wall / distance_wall;
+                        normalY = deltaY_wall / distance_wall;
+                        baseRestitution = WALL_OBSTACLE_RESTITUTION;
+                        collisionPointData = { type: 'wall', distance: distance_wall };
+                    }
+                } else if (obstacle.type === 'stone') {
+                    const deltaX_stone = ball.x - obstacle.x;
+                    const deltaY_stone = ball.y - obstacle.y;
+                    const distance_stone = Math.sqrt(deltaX_stone * deltaX_stone + deltaY_stone * deltaY_stone);
+                    if (distance_stone < ball.radius + obstacle.radius) {
+                        normalX = deltaX_stone / distance_stone; // Normal is from stone center to ball center
+                        normalY = deltaY_stone / distance_stone;
+                        baseRestitution = STONE_RESTITUTION;
+                        collisionPointData = { type: 'stone', distance: distance_stone, combinedRadius: ball.radius + obstacle.radius };
+                    }
+                } else if (obstacle.type === 'tree') {
+                    const trunkRect = {
+                        x: obstacle.x - obstacle.trunkCollisionWidth / 2,
+                        y: obstacle.y - obstacle.trunkCollisionHeight, // tree.y is base of trunk, collision height extends upwards
+                        width: obstacle.trunkCollisionWidth,
+                        height: obstacle.trunkCollisionHeight
+                    };
+                    let closestX = Math.max(trunkRect.x, Math.min(ball.x, trunkRect.x + trunkRect.width));
+                    let closestY = Math.max(trunkRect.y, Math.min(ball.y, trunkRect.y + trunkRect.height));
+                    const deltaX_trunk = ball.x - closestX;
+                    const deltaY_trunk = ball.y - closestY;
+                    const distanceSquared_trunk = (deltaX_trunk * deltaX_trunk) + (deltaY_trunk * deltaY_trunk);
+                    if (distanceSquared_trunk < (ball.radius * ball.radius) && distanceSquared_trunk > 1e-9) {
+                        const distance_trunk = Math.sqrt(distanceSquared_trunk);
+                        normalX = deltaX_trunk / distance_trunk;
+                        normalY = deltaY_trunk / distance_trunk;
+                        baseRestitution = TREE_TRUNK_RESTITUTION;
+                        collisionPointData = { type: 'tree', distance: distance_trunk };
+                    }
+                }
+
+                if (collisionPointData) {
+                    let penetration = 0;
+                    if (collisionPointData.type === 'wall' || collisionPointData.type === 'tree') {
+                        penetration = ball.radius - collisionPointData.distance;
+                    } else if (collisionPointData.type === 'stone') {
+                        penetration = collisionPointData.combinedRadius - collisionPointData.distance;
+                    }
+
+                    if (penetration > 0) { // If overlapping
+                        ball.x += normalX * penetration * 1.02; // Correct position to resolve overlap
+                        ball.y += normalY * penetration * 1.02;
+                    }
+
+                    const impactSpeedNormalComponent = Math.abs(ball.dx * normalX + ball.dy * normalY); // Speed component towards the normal
+                    
+                    let dynamicRestitution = baseRestitution;
+                    // This dynamic restitution makes the ball less bouncy on hard hits.
+                    // And very "dead" on extremely soft touches. This might be a specific design choice.
+                    if (impactSpeedNormalComponent > 0.1) { // Only apply dynamic factor if significant impact
+                        const impactRatio = Math.min(1, impactSpeedNormalComponent / maxImpactSpeedForDamping);
+                        // restitutionFactor decreases as impactRatio increases (harder hit = more damping)
+                        let restitutionFactor = maxRestitutionFactor - (maxRestitutionFactor - minRestitutionFactor) * impactRatio;
+                        dynamicRestitution = baseRestitution * restitutionFactor;
+                        // Clamp the dynamic restitution
+                        dynamicRestitution = Math.max(baseRestitution * 0.3, Math.min(dynamicRestitution, baseRestitution * 1.1));
+                    } else { // Very low impact speed
+                        dynamicRestitution = baseRestitution * 0.2; // Makes soft touches very non-bouncy
+                    }
+                    
+                    const dotProduct = ball.dx * normalX + ball.dy * normalY; // Velocity projection onto normal
+
+                    if (dotProduct < 0) { // If ball is moving towards the obstacle surface
+                        // Reflect velocity: v_new = v_old - (1 + e) * (v_old . n) * n
+                        let impulsePartX = (1 + dynamicRestitution) * dotProduct * normalX;
+                        let impulsePartY = (1 + dynamicRestitution) * dotProduct * normalY;
+                        
+                        ball.dx = ball.dx - impulsePartX;
+                        ball.dy = ball.dy - impulsePartY;
+                    }
+                }
+            });
+        }
+
+        function updateBallPosition() {
+            if (currentMode !== MODE_PLAY || !ball.isMoving || ball.isSinking) return;
+
+            addBallTrailPoint(ball.x, ball.y);
+
+            // Hole Gravity
+            if (!ball.isSinking && gameActive) {
+                const distToHole = distance(ball.x, ball.y, hole.x, hole.y);
+                const ballSpeed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
+                const effectiveGravityRadius = hole.radius * hole.gravityRadiusMultiplier;
+
+                if (distToHole < effectiveGravityRadius && distToHole > ball.radius && ballSpeed < ball.launchPower * 0.45) {
+                    const angleToHole = Math.atan2(hole.y - ball.y, hole.x - ball.x);
+                    const gravityFactor = 1 - (distToHole / effectiveGravityRadius); // Stronger closer to hole
+                    ball.dx += Math.cos(angleToHole) * hole.gravityStrength * (1 + gravityFactor * 1.8);
+                    ball.dy += Math.sin(angleToHole) * hole.gravityStrength * (1 + gravityFactor * 1.8);
+                }
+            }
+
+            ball.x += ball.dx;
+            ball.y += ball.dy;
+
+            ball.dx *= ball.friction;
+            ball.dy *= ball.friction;
+
+            if (Math.sqrt(ball.dx**2 + ball.dy**2) < ball.minSpeed) {
+                ball.dx = 0; ball.dy = 0;
+                ball.isMoving = false;
+                if (gameActive) {
+                    modeInstructionsP.textContent = "توقفت الكرة. انقر لضربها مجددًا.";
+                    showLaunchIndicator = true;
+                    checkGameOver();
+                }
+            }
+
+            handleObstacleCollisions(); // Check and resolve collisions with obstacles
+
+            // Canvas edge collisions
+            if (ball.x + ball.radius > canvas.width) {
+                ball.x = canvas.width - ball.radius;
+                if (ball.dx > 0) ball.dx *= -WALL_RESTITUTION_CANVAS_EDGE;
+            } else if (ball.x - ball.radius < 0) {
+                ball.x = ball.radius;
+                if (ball.dx < 0) ball.dx *= -WALL_RESTITUTION_CANVAS_EDGE;
+            }
+            if (ball.y + ball.radius > canvas.height) {
+                ball.y = canvas.height - ball.radius;
+                if (ball.dy > 0) ball.dy *= -WALL_RESTITUTION_CANVAS_EDGE;
+            } else if (ball.y - ball.radius < 0) {
+                ball.y = ball.radius;
+                if (ball.dy < 0) ball.dy *= -WALL_RESTITUTION_CANVAS_EDGE;
+            }
+
+            // Check for sinking in hole
+            if (checkHoleCollision() && !ball.isSinking) {
+                ball.isMoving = false; ball.dx = 0; ball.dy = 0;
+                ball.isSinking = true; ball.sinkTimer = 0;
+                gameActive = false;
+                let scoreThisLevel = Math.max(0, parForLevel - playerHits + 1) * 10;
+                if (playerHits <= parForLevel) scoreThisLevel += (parForLevel === playerHits ? 80 : 55);
+                if (playerHits === 1) scoreThisLevel += 160; // Bonus for hole-in-one
+                totalScore += scoreThisLevel;
+                displayMessage(`رائع! دخلت الكرة الحفرة في ${playerHits} ضربات.\nنقاط المستوى: ${scoreThisLevel}`, 3800);
+                updateInterface();
+            }
+        }
+        function checkGameOver() { if (playerHits >= maxHitsForLevel && !checkHoleCollision() && !ball.isMoving && !ball.isSinking) { gameActive = false; showLaunchIndicator = false; displayMessage(`انتهت الضربات! (${playerHits}/${maxHitsForLevel}).\n حاول مرة أخرى.`, 3000); updateInterface(); return true; } return false; }
+        function checkHoleCollision() { const dist = Math.sqrt((ball.x - hole.x)**2 + (ball.y - hole.y)**2); return dist < hole.radius; }
+        function updateScoreDisplay() { scoreP.textContent = `النقاط: ${totalScore}`; levelInfoP.textContent = `${levels[currentLevelIndex].name}`; if (currentMode === MODE_PLAY || (!gameActive && playerHits > 0 && !checkHoleCollision())) { hitsP.textContent = `الضربات: ${playerHits} / ${maxHitsForLevel} (Par: ${parForLevel})`; } else if(checkHoleCollision()) { hitsP.textContent = `الضربات: ${playerHits} / ${maxHitsForLevel} (Par: ${parForLevel})`;} else hitsP.textContent = `Par: ${parForLevel}`; }
+        function loadLevel(levelIdx) { currentLevelIndex = levelIdx; const levelData = levels[currentLevelIndex]; let currentObstaclesToLoad = JSON.parse(JSON.stringify(levelData.obstacles)); if (currentLevelIndex === USER_DESIGN_LEVEL_INDEX) { try { const savedObstacles = localStorage.getItem('userDesignedLevel_obstacles'); if (savedObstacles) { currentObstaclesToLoad = JSON.parse(savedObstacles); levels[USER_DESIGN_LEVEL_INDEX].obstacles = JSON.parse(savedObstacles); } } catch (e) { console.error("Failed to load user design from localStorage:", e); } } obstacles = JSON.parse(JSON.stringify(currentObstaclesToLoad)); hole.x = levelData.holePos.x; hole.y = levelData.holePos.y; parForLevel = levelData.par; maxHitsForLevel = levelData.maxHits; }
+        function setupNewRound(isContinuingSession = false) { gameActive = true; ball.isMoving = false; ball.dx = 0; ball.dy = 0; ball.isSinking = false; ball.radius = ball.originalRadius; ball.sinkTimer = 0; playerHits = 0; ballTrail = []; showLaunchIndicator = true; const levelData = levels[currentLevelIndex]; if (!isContinuingSession) { loadLevel(currentLevelIndex); } else { hole.x = levelData.holePos.x; hole.y = levelData.holePos.y; parForLevel = levelData.par; maxHitsForLevel = levelData.maxHits; } paddle.x = canvas.width / 2 - paddle.width / 2; ball.x = paddle.x + paddle.width / 2; ball.y = paddle.y - ball.radius - 10; const holeVisualExtent = hole.radius * 1.15 + 7 + 20; const distToPlayerStart = distance(ball.x, ball.y, hole.x, hole.y); if (distToPlayerStart < holeVisualExtent + ball.radius) { let newHoleX = hole.x, newHoleY = hole.y; if (hole.x < canvas.width / 2) newHoleX = canvas.width * 0.78; else newHoleX = canvas.width * 0.22; if (hole.y < canvas.height / 2) newHoleY = canvas.height * 0.7; else newHoleY = canvas.height * 0.25; hole.x = Math.max(holeVisualExtent, Math.min(canvas.width - holeVisualExtent, newHoleX)); hole.y = Math.max(holeVisualExtent, Math.min(canvas.height - holeVisualExtent, newHoleY)); } hideMessage(); displayMessage(`المستوى: ${levels[currentLevelIndex].name}\nPar: ${parForLevel} | الأقصى: ${maxHitsForLevel}`, 3000); updateInterface(); }
+        [toolWallButton, toolStoneButton, toolTreeButton, toolEraserButton].forEach(button => { button.addEventListener('click', (e) => { currentTool = e.target.id.substring(4).toLowerCase(); updateInterface(); }); });
+        function isPointInRect(px, py, rect) { return px >= rect.x && px <= rect.x + rect.width && py >= rect.y && py <= rect.y + rect.height; }
+        function distance(x1, y1, x2, y2) { return Math.sqrt(Math.pow(x1 - x2, 2) + Math.pow(y1 - y2, 2)); }
+
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            if (currentMode === MODE_DESIGN) {
+                if (currentTool === 'eraser') {
+                    for (let i = obstacles.length - 1; i >= 0; i--) {
+                        const obs = obstacles[i];
+                        let clickedOnObstacle = false;
+                        if (obs.type === 'wall') {
+                            if (isPointInRect(mouseX, mouseY, {x: obs.x, y: obs.y, width: obs.width, height: obs.height})) clickedOnObstacle = true;
+                        } else if (obs.type === 'stone') {
+                            const sWidth = ACTUAL_PIXEL_ART_ROCK_WIDTH;
+                            const sHeight = ACTUAL_PIXEL_ART_ROCK_HEIGHT;
+                            const dX = obs.x - sWidth / 2;
+                            const dY = obs.y - sHeight / 2;
+                            if (mouseX >= dX && mouseX <= dX + sWidth && mouseY >= dY && mouseY <= dY + sHeight) clickedOnObstacle = true;
+                        } else if (obs.type === 'tree') {
+                            const effectivePAScale = PIXEL_ART_TREE_SCALE;
+                            const trunkBaseRow = 25;
+                            const trunkCenterCol = 16;
+                            const visWidth = PIXEL_ART_TREE_PATTERN_WIDTH_CHARS * effectivePAScale;
+                            const visHeight = PIXEL_ART_TREE_PATTERN_HEIGHT_CHARS * effectivePAScale;
+                            const dX = obs.x - (trunkCenterCol * effectivePAScale);
+                            const dY = obs.y - (trunkBaseRow * effectivePAScale);
+                            if (mouseX >= dX && mouseX <= dX + visWidth && mouseY >= dY && mouseY <= dY + visHeight) clickedOnObstacle = true;
+                        }
+
+                        if (clickedOnObstacle) {
+                            obstacles.splice(i, 1);
+                            gameStatusP.textContent = "تم مسح العائق.";
+                            setTimeout(() => { if (gameStatusP.textContent === "تم مسح العائق.") gameStatusP.textContent = ""; }, 1500);
+                            if (currentLevelIndex === USER_DESIGN_LEVEL_INDEX) {
+                                levels[USER_DESIGN_LEVEL_INDEX].obstacles = JSON.parse(JSON.stringify(obstacles));
+                                try { localStorage.setItem('userDesignedLevel_obstacles', JSON.stringify(levels[USER_DESIGN_LEVEL_INDEX].obstacles)); }
+                                catch (err) { console.error("Failed to auto-save user design (eraser):", err); }
+                            }
+                            break;
+                        }
+                    }
+                } else { 
+                    let newObstacle = {};
+                    const fixedSize = FIXED_SIZES[currentTool];
+                    if (currentTool === 'wall') {
+                        newObstacle = { type: 'wall', x: mouseX - fixedSize.width / 2, y: mouseY - fixedSize.height / 2, width: fixedSize.width, height: fixedSize.height, color: '#8A9AAB', topColor: '#B8C4D2'};
+                    } else if (currentTool === 'stone') {
+                        newObstacle = { type: 'stone', x: mouseX, y: mouseY, radius: fixedSize.radius };
+                    } else if (currentTool === 'tree') {
+                        newObstacle = { type: 'tree', x: mouseX, y: mouseY, trunkCollisionWidth: fixedSize.trunkCollisionWidth, trunkCollisionHeight: fixedSize.trunkCollisionHeight };
+                    }
+
+                    let validPlacement = true;
+                    if (newObstacle.type === 'wall') {
+                        if (newObstacle.x < 0 || newObstacle.x + newObstacle.width > canvas.width || newObstacle.y < 0 || newObstacle.y + newObstacle.height > canvas.height) validPlacement = false;
+                    } else if (newObstacle.type === 'stone') {
+                        const sW = ACTUAL_PIXEL_ART_ROCK_WIDTH; const sH = ACTUAL_PIXEL_ART_ROCK_HEIGHT;
+                        if (newObstacle.x - sW/2 < 0 || newObstacle.x + sW/2 > canvas.width || newObstacle.y - sH/2 < 0 || newObstacle.y + sH/2 > canvas.height) validPlacement = false;
+                    } else if (newObstacle.type === 'tree') {
+                        const effPAScaleN = PIXEL_ART_TREE_SCALE;
+                        const tbcR = 25; const tbcC = 16;
+                        const spriteDrawTopX = newObstacle.x - (tbcC * effPAScaleN);
+                        const spriteDrawTopY = newObstacle.y - (tbcR * effPAScaleN);
+                        const spriteWidth = PIXEL_ART_TREE_PATTERN_WIDTH_CHARS * effPAScaleN;
+                        const spriteHeight = PIXEL_ART_TREE_PATTERN_HEIGHT_CHARS * effPAScaleN;
+                        if (spriteDrawTopX < 0 || spriteDrawTopX + spriteWidth > canvas.width || spriteDrawTopY < 0 || spriteDrawTopY + spriteHeight > canvas.height) validPlacement = false;
+                    }
+
+
+                    if (Object.keys(newObstacle).length > 0 && validPlacement) {
+                        obstacles.push(newObstacle);
+                        if (currentLevelIndex === USER_DESIGN_LEVEL_INDEX) {
+                            levels[USER_DESIGN_LEVEL_INDEX].obstacles = JSON.parse(JSON.stringify(obstacles));
+                             try { localStorage.setItem('userDesignedLevel_obstacles', JSON.stringify(levels[USER_DESIGN_LEVEL_INDEX].obstacles));}
+                             catch (err) { console.error("Failed to auto-save user design (add):", err); }
+                        }
+                    } else if (!validPlacement) {
+                        gameStatusP.textContent = "لا يمكن وضع العائق هنا (قريب من الحافة).";
+                        setTimeout(()=> { if(gameStatusP.textContent === "لا يمكن وضع العائق هنا (قريب من الحافة).") gameStatusP.textContent = "";}, 2000);
+                    }
+                }
+            } else if (currentMode === MODE_PLAY && gameActive) {
+                const onPaddle = Math.abs(ball.x - (paddle.x + paddle.width / 2)) < paddle.width / 2 + ball.radius &&
+                                 Math.abs(ball.y - (paddle.y - ball.radius - 10)) < ball.radius * 2.2;
+                if (!ball.isMoving && (onPaddle || (ball.dx === 0 && ball.dy === 0))) {
+                    if (playerHits < maxHitsForLevel) {
+                        playerHits++;
+                        updateScoreDisplay();
+                        ball.isMoving = true;
+                        modeInstructionsP.textContent = "الكرة تتدحرج!";
+                        showLaunchIndicator = false;
+                        const distToMouse = distance(ball.x, ball.y, mouseX, mouseY);
+                        const maxVisualIndicatorLength = 100;
+                        let powerRatio = Math.min(1, distToMouse / (maxVisualIndicatorLength * 1.25));
+                        if (distToMouse < ball.radius * 2.2) powerRatio = 0.09;
+                        const currentLaunchPower = ball.minLaunchPower + (ball.launchPower - ball.minLaunchPower) * powerRatio;
+                        const angle = Math.atan2(mouseY - ball.y, mouseX - ball.x);
+                        ball.dx = Math.cos(angle) * currentLaunchPower;
+                        ball.dy = Math.sin(angle) * currentLaunchPower;
+                        ballTrail = [];
+                    } else {
+                        checkGameOver();
+                    }
+                }
+            }
+        });
+        canvas.addEventListener('mousemove', (e) => { if (currentMode === MODE_PLAY && gameActive) { const rect = canvas.getBoundingClientRect(); const mouseX = e.clientX - rect.left; paddle.x = mouseX - paddle.width / 2; if (paddle.x < 0) paddle.x = 0; if (paddle.x + paddle.width > canvas.width) paddle.x = canvas.width - paddle.width; if (!ball.isMoving && gameActive && !checkHoleCollision() && !ball.isSinking) { ball.x = paddle.x + paddle.width / 2; ball.y = paddle.y - ball.radius - 10; launchIndicatorTarget.x = e.clientX - rect.left; launchIndicatorTarget.y = e.clientY - rect.top; } else showLaunchIndicator = false; } });
+
+        function drawLaunchIndicator() { // ADJUSTED FOR 2D
+            if (currentMode !== MODE_PLAY || !gameActive || ball.isMoving || !showLaunchIndicator || ball.isSinking) return;
+            const ballDrawY = ball.y;
+            const dist = distance(ball.x, ballDrawY, launchIndicatorTarget.x, launchIndicatorTarget.y);
+            const maxLength = 90;
+            const powerRatio = Math.min(1, dist / (maxLength * 1.4));
+            const angle = Math.atan2(launchIndicatorTarget.y - ballDrawY, launchIndicatorTarget.x - ball.x);
+            const indicatorLength = Math.min(maxLength, dist) * (0.45 + powerRatio * 0.55);
+            const endX = ball.x + Math.cos(angle) * indicatorLength;
+            const endY = ballDrawY + Math.sin(angle) * indicatorLength;
+            const pulseFactor = 0.88 + Math.sin(Date.now() / 170) * 0.12;
+            const lineColor = `rgba(255, ${255 - powerRatio * 160}, 0, ${(0.55 + powerRatio * 0.45) * pulseFactor})`;
+            ctx.beginPath();
+            ctx.moveTo(ball.x, ballDrawY);
+            ctx.lineTo(endX, endY);
+            ctx.strokeStyle = lineColor;
+            ctx.lineWidth = (2.5 + powerRatio * 3.5) * pulseFactor;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+            const arrowSize = (8 + powerRatio * 6.5) * pulseFactor;
+            ctx.beginPath();
+            ctx.moveTo(endX, endY);
+            ctx.lineTo(endX - arrowSize * Math.cos(angle - Math.PI / 7.5), endY - arrowSize * Math.sin(angle - Math.PI / 7.5));
+            ctx.lineTo(endX - arrowSize * Math.cos(angle + Math.PI / 7.5), endY - arrowSize * Math.sin(angle + Math.PI / 7.5));
+            ctx.closePath();
+            ctx.fillStyle = lineColor;
+            ctx.fill();
+        }
+        toggleModeButton.addEventListener('click', () => { if (currentMode === MODE_DESIGN) { currentMode = MODE_PLAY; const currentLevelData = levels[currentLevelIndex]; hole.x = currentLevelData.holePos.x; hole.y = currentLevelData.holePos.y; parForLevel = currentLevelData.par; maxHitsForLevel = currentLevelData.maxHits; setupNewRound(true); } else { currentMode = MODE_DESIGN; gameActive = false; ball.isMoving = false; ball.isSinking = false; ball.radius = ball.originalRadius; showLaunchIndicator = false; loadLevel(currentLevelIndex); updateInterface(); } });
+        clearObstaclesButton.addEventListener('click', () => { if (currentMode === MODE_DESIGN) { obstacles.length = 0; if (currentLevelIndex === USER_DESIGN_LEVEL_INDEX) { levels[USER_DESIGN_LEVEL_INDEX].obstacles = []; try { localStorage.setItem('userDesignedLevel_obstacles', JSON.stringify([])); } catch (e) { console.error("Failed to clear user design in localStorage:", e); } } displayMessage("تم مسح جميع العوائق.", 1500); } });
+        playAgainButton.addEventListener('click', () => { if (currentMode === MODE_PLAY && !gameActive) { loadLevel(currentLevelIndex); setupNewRound(false); } });
+        nextLevelButton.addEventListener('click', () => { if (currentMode === MODE_PLAY && !gameActive && currentLevelIndex < levels.length - 1 ) { currentLevelIndex++; loadLevel(currentLevelIndex); setupNewRound(false); } else if (currentMode === MODE_PLAY && !gameActive && currentLevelIndex >= levels.length -1) { displayMessage("لقد أكملت جميع المستويات المصممة!\n يمكنك الآن تصميم مستواك الخاص أو إعادة المستويات السابقة.", 3500); nextLevelButton.style.display = 'none'; } });
+
+        function mainLoop() {
+            requestAnimationFrame(mainLoop);
+            ctx.clearRect(0,0,canvas.width, canvas.height);
+            drawCanvasBackground();
+
+            drawHole(); 
+
+            let allDrawableItems = [...obstacles.map(obs => ({...obs, itemType: obs.type}))];
+
+            if (currentMode === MODE_PLAY) {
+                allDrawableItems.push({
+                    itemType: 'ball',
+                    x: ball.x, y: ball.y, radius: ball.radius, color: ball.color,
+                    highlightColor: ball.highlightColor, shadowColor: ball.shadowColor,
+                    isSinking: ball.isSinking, sinkTimer: ball.sinkTimer,
+                    originalRadius: ball.originalRadius, visualHeight: ball.visualHeight
+                });
+                 drawBallTrail();
+            }
+
+
+            allDrawableItems.sort((a, b) => {
+                let yA_base = a.y;
+                let yB_base = b.y;
+                let effectiveYA = yA_base;
+                let effectiveYB = yB_base;
+
+                if (a.itemType === 'wall') effectiveYA += a.height * 0.5; // Sort by center of wall
+                else if (a.itemType === 'stone') effectiveYA += ACTUAL_PIXEL_ART_ROCK_HEIGHT * 0.1; // Stone's y is center, sort slightly lower
+
+                if (b.itemType === 'wall') effectiveYB += b.height * 0.5;
+                else if (b.itemType === 'stone') effectiveYB += ACTUAL_PIXEL_ART_ROCK_HEIGHT * 0.1;
+
+                return effectiveYA - effectiveYB; // Smaller Y (further up) drawn first
+            });
+
+            allDrawableItems.forEach(item => {
+                if (item.itemType === 'wall') drawWall(item);
+                else if (item.itemType === 'stone') drawStone(item);
+                else if (item.itemType === 'tree') drawTree(item);
+                else if (item.itemType === 'ball') {
+                    let tempBallState = {...ball}; 
+                    Object.assign(ball, item);    
+                    drawBall();
+                    Object.assign(ball, tempBallState); 
+                }
+            });
+
+
+            if (currentMode === MODE_PLAY) {
+                drawPaddle(); 
+                updateBallPosition();
+                drawLaunchIndicator();
+            } else { 
+                if (checkHoleCollision() && !gameActive && !ball.isMoving && !ball.isSinking){
+                    let tempBallRadius = ball.radius;
+                    ball.radius = ball.originalRadius * 0.45; 
+                    ball.x = hole.x; ball.y = hole.y;
+
+                    const drawY = ball.y; 
+
+                    const grad = ctx.createRadialGradient( ball.x - ball.radius * 0.35, drawY - ball.radius * 0.35, ball.radius * 0.1, ball.x, drawY, ball.radius );
+                    grad.addColorStop(0, ball.highlightColor); grad.addColorStop(0.7, ball.color); grad.addColorStop(1, d3.color(ball.color).darker(0.3).toString());
+                    ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(ball.x, drawY, ball.radius, 0, Math.PI * 2); ctx.fill();
+                    
+                    ball.radius = tempBallRadius;
+                }
+            }
+        }
+
+        loadLevel(currentLevelIndex);
+        updateInterface();
+        mainLoop();
+    </script>
+</body>
+</html>
